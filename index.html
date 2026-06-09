@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Abstract Chad Score</title>
+    <meta
+      name="description"
+      content="Scan an Abstract Global Wallet and X profile to generate a shareable Abstract Chad score card."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Sora:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css?v=5.6.0" />
+  </head>
+  <body>
+    <div id="loading-overlay" class="loading-overlay hidden">
+      <div class="loading-container">
+        <div class="spinner-wrap">
+          <div class="loading-spinner"></div>
+          <div class="spinner-logo">
+            <svg viewBox="0 0 52 47" class="loading-logo-svg">
+              <path d="M33.7221 31.0658L43.997 41.3463L39.1759 46.17L28.901 35.8895C28.0201 35.0081 26.8589 34.5273 25.6095 34.5273C24.3602 34.5273 23.199 35.0081 22.3181 35.8895L12.0432 46.17L7.22205 41.3463L17.4969 31.0658H33.7141H33.7221Z" fill="#38d887"/>
+              <path d="M35.4359 28.101L49.4668 31.8591L51.2287 25.2645L37.1978 21.5065C35.9965 21.186 34.9954 20.4167 34.3708 19.335C33.7461 18.2613 33.586 17.0033 33.9063 15.8013L37.6623 1.76283L31.0713 0L27.3153 14.0385L35.4279 28.093L35.4359 28.101Z" fill="#38d887"/>
+              <path d="M15.7912 28.101L1.76028 31.8591L-0.00158691 25.2645L14.0293 21.5065C15.2306 21.186 16.2316 20.4167 16.8563 19.335C17.4809 18.2613 17.6411 17.0033 17.3208 15.8013L13.5648 1.76283L20.1558 0L23.9118 14.0385L15.7992 28.093L15.7912 28.101Z" fill="#38d887"/>
+            </svg>
+          </div>
+        </div>
+        <div class="loading-title">Scanning Profile</div>
+        <div class="loading-status" id="loading-status-text">Connecting to Abstract Network...</div>
+      </div>
+    </div>
+    <div class="bg-glows"></div>
+    <div class="noise"></div>
+    <main class="shell">
+      <section class="hero">
+        <div class="brand-mark" aria-hidden="true">
+          <div class="brand-mark-ring">
+            <svg viewBox="0 0 52 47" class="brand-mark-svg">
+              <path
+                d="M33.7221 31.0658L43.997 41.3463L39.1759 46.17L28.901 35.8895C28.0201 35.0081 26.8589 34.5273 25.6095 34.5273C24.3602 34.5273 23.199 35.0081 22.3181 35.8895L12.0432 46.17L7.22205 41.3463L17.4969 31.0658H33.7141H33.7221Z"
+              />
+              <path
+                d="M35.4359 28.101L49.4668 31.8591L51.2287 25.2645L37.1978 21.5065C35.9965 21.186 34.9954 20.4167 34.3708 19.335C33.7461 18.2613 33.586 17.0033 33.9063 15.8013L37.6623 1.76283L31.0713 0L27.3153 14.0385L35.4279 28.093L35.4359 28.101Z"
+              />
+              <path
+                d="M15.7912 28.101L1.76028 31.8591L-0.00158691 25.2645L14.0293 21.5065C15.2306 21.186 16.2316 20.4167 16.8563 19.335C17.4809 18.2613 17.6411 17.0033 17.3208 15.8013L13.5648 1.76283L20.1558 0L23.9118 14.0385L15.7992 28.093L15.7912 28.101Z"
+              />
+            </svg>
+          </div>
+        </div>
+
+        <p class="eyebrow">Abstract Reputation Layer</p>
+        <h1>How <span class="headline-accent">Abstract Chad</span> Are You?</h1>
+        <p class="lede">
+          Enter your AGW address, X handle, Discord, and Portal Tier to scan badges, XP, Abstract activity, and social
+          signal in one clean shareable card.
+        </p>
+
+        <form id="analyzer-form" class="scan-form" novalidate>
+          <div class="scan-card-top">
+            <div class="scan-card-brand">
+              <div class="scan-card-logo">
+                <svg viewBox="0 0 52 47" class="scan-card-logo-svg">
+                  <path
+                    d="M33.7221 31.0658L43.997 41.3463L39.1759 46.17L28.901 35.8895C28.0201 35.0081 26.8589 34.5273 25.6095 34.5273C24.3602 34.5273 23.199 35.0081 22.3181 35.8895L12.0432 46.17L7.22205 41.3463L17.4969 31.0658H33.7141H33.7221Z"
+                  />
+                  <path
+                    d="M35.4359 28.101L49.4668 31.8591L51.2287 25.2645L37.1978 21.5065C35.9965 21.186 34.9954 20.4167 34.3708 19.335C33.7461 18.2613 33.586 17.0033 33.9063 15.8013L37.6623 1.76283L31.0713 0L27.3153 14.0385L35.4279 28.093L35.4359 28.101Z"
+                  />
+                  <path
+                    d="M15.7912 28.101L1.76028 31.8591L-0.00158691 25.2645L14.0293 21.5065C15.2306 21.186 16.2316 20.4167 16.8563 19.335C17.4809 18.2613 17.6411 17.0033 17.3208 15.8013L13.5648 1.76283L20.1558 0L23.9118 14.0385L15.7992 28.093L15.7912 28.101Z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <strong>Scan Abstract Profile</strong>
+                <p>AGW, Portal, X, and Discord signal in one pass</p>
+              </div>
+            </div>
+            <div class="scan-card-mode">Abstract Green Mode</div>
+          </div>
+
+          <div class="scan-fields">
+            <div class="input-group wallet-group">
+              <input
+                id="wallet"
+                name="wallet"
+                placeholder="0x... your AGW address"
+                autocomplete="off"
+                required
+              />
+            </div>
+            <div class="input-group">
+              <input
+                id="handle"
+                name="handle"
+                placeholder="@abstractmaxi"
+                autocomplete="off"
+                required
+              />
+            </div>
+            <!-- Custom select for Discord Role -->
+            <div class="custom-select" id="discord-roles-select">
+              <div class="select-trigger">
+                <span>Select Discord Role</span>
+                <svg class="chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5H7z"/></svg>
+              </div>
+              <div class="select-options">
+                <div class="option" data-value="verified">
+                  <svg class="role-icon verified" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2L3 5v6c0 5.5 4.5 10 9 10s9-4.5 9-10V5l-9-3zm-2 15l-4-4 1.4-1.4 2.6 2.6 6.6-6.6 1.4 1.4-8 8z" /></svg>
+                  <span>Verified Member</span>
+                </div>
+                <div class="option" data-value="explorer">
+                  <span class="role-emoji explorer">🐧</span>
+                  <span>Explorer</span>
+                </div>
+                <div class="option" data-value="builder">
+                  <span class="role-emoji builder">👾</span>
+                  <span>Builder</span>
+                </div>
+                <div class="option" data-value="quant">
+                  <span class="role-emoji quant">✳️</span>
+                  <span>Quant</span>
+                </div>
+              </div>
+              <input type="hidden" name="discordRoles" id="discord-roles-value" value="">
+            </div>
+
+            <!-- Custom select for Portal Tier -->
+            <div class="custom-select" id="portal-tier-select">
+              <div class="select-trigger">
+                <span>Select Portal Tier</span>
+                <svg class="chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5H7z"/></svg>
+              </div>
+              <div class="select-options">
+                <div class="option" data-value="none">
+                  <svg class="tier-icon none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg>
+                  <span>None</span>
+                </div>
+                <div class="option" data-value="bronze-1">
+                  <svg class="tier-icon bronze" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Bronze I</span>
+                </div>
+                <div class="option" data-value="bronze-2">
+                  <svg class="tier-icon bronze" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Bronze II</span>
+                </div>
+                <div class="option" data-value="bronze-3">
+                  <svg class="tier-icon bronze" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Bronze III</span>
+                </div>
+                <div class="option" data-value="silver-1">
+                  <svg class="tier-icon silver" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Silver I</span>
+                </div>
+                <div class="option" data-value="silver-2">
+                  <svg class="tier-icon silver" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Silver II</span>
+                </div>
+                <div class="option" data-value="silver-3">
+                  <svg class="tier-icon silver" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Silver III</span>
+                </div>
+                <div class="option" data-value="gold-1">
+                  <svg class="tier-icon gold" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Gold I</span>
+                </div>
+                <div class="option" data-value="gold-2">
+                  <svg class="tier-icon gold" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Gold II</span>
+                </div>
+                <div class="option" data-value="gold-3">
+                  <svg class="tier-icon gold" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Gold III</span>
+                </div>
+                <div class="option" data-value="platinum-1">
+                  <svg class="tier-icon platinum" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Platinum I</span>
+                </div>
+                <div class="option" data-value="platinum-2">
+                  <svg class="tier-icon platinum" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Platinum II</span>
+                </div>
+                <div class="option" data-value="platinum-3">
+                  <svg class="tier-icon platinum" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Platinum III</span>
+                </div>
+                <div class="option" data-value="diamond-1">
+                  <svg class="tier-icon diamond" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Diamond I</span>
+                </div>
+                <div class="option" data-value="diamond-2">
+                  <svg class="tier-icon diamond" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Diamond II</span>
+                </div>
+                <div class="option" data-value="diamond-3">
+                  <svg class="tier-icon diamond" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Diamond III</span>
+                </div>
+                <div class="option" data-value="obsidian-1">
+                  <svg class="tier-icon obsidian" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Obsidian I</span>
+                </div>
+                <div class="option" data-value="obsidian-2">
+                  <svg class="tier-icon obsidian" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Obsidian II</span>
+                </div>
+                <div class="option" data-value="obsidian-3">
+                  <svg class="tier-icon obsidian" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" fill="currentColor"/></svg>
+                  <span>Obsidian III</span>
+                </div>
+              </div>
+              <input type="hidden" name="portalTierSelect" id="portal-tier-value" value="" required>
+            </div>
+
+            <!-- Custom select for Pudgy NFT ownership -->
+            <div class="custom-select" id="pudgy-nft-select">
+              <div class="select-trigger">
+                <span>Select Pudgy NFT Owned</span>
+                <svg class="chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5H7z"/></svg>
+              </div>
+              <div class="select-options">
+                <div class="option" data-value="none">
+                  <svg class="role-icon none-icon" viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: none; stroke: #94a3b8; stroke-width: 2.5; margin-right: 8px;"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                  <span>None</span>
+                </div>
+                <div class="option" data-value="lilpudgy">
+                  <img src="./assets/pudgy_icon.png?v=5.5.0" class="role-emoji lilpudgy-select-icon" style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover; margin-right: 8px;" alt="Lil Pudgy" />
+                  <span>Lil Pudgy NFT</span>
+                </div>
+                <div class="option" data-value="pudgy">
+                  <img src="./assets/lilpudgy_icon.png?v=5.5.0" class="role-emoji pudgy-select-icon" style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover; margin-right: 8px;" alt="Pudgy" />
+                  <span>Pudgy Penguin NFT</span>
+                </div>
+                <div class="option" data-value="both">
+                  <span class="pudgy-both-icons" style="display:inline-flex;align-items:center;gap:2px;margin-right:8px;">
+                    <img src="./assets/pudgy_icon.png?v=5.5.0" style="width:18px;height:18px;border-radius:50%;object-fit:cover;" alt="" />
+                    <img src="./assets/lilpudgy_icon.png?v=5.5.0" style="width:18px;height:18px;border-radius:50%;object-fit:cover;" alt="" />
+                  </span>
+                  <span>Both NFTs</span>
+                </div>
+              </div>
+              <input type="hidden" name="pudgyNftSelect" id="pudgy-nft-value" value="" required>
+            </div>
+          </div>
+          <div class="scan-card-bottom">
+            <input type="hidden" id="mode" name="mode" value="demo" />
+            <button id="submit-button" type="submit">Scan Profile</button>
+          </div>
+        </form>
+
+        <div class="scan-meta">
+          <span id="status" class="status">Ready to scan your AGW + X + Discord profile</span>
+        </div>
+      </section>
+
+      <section id="result" class="result hidden">
+        <article class="score-card" id="score-card">
+          <div class="score-card-glow-line"></div>
+          <div class="score-card-dots"></div>
+          <div class="score-card-mascot" aria-hidden="true">
+            <img id="score-card-mascot-img" src="./assets/npc.png?v=6.1.0" alt="" />
+          </div>
+          <div class="score-card-head">
+            <div class="score-brand">
+              <div class="score-brand-icon">
+                <svg viewBox="0 0 52 47" class="score-brand-logo" aria-hidden="true">
+                  <path
+                    d="M33.7221 31.0658L43.997 41.3463L39.1759 46.17L28.901 35.8895C28.0201 35.0081 26.8589 34.5273 25.6095 34.5273C24.3602 34.5273 23.199 35.0081 22.3181 35.8895L12.0432 46.17L7.22205 41.3463L17.4969 31.0658H33.7141H33.7221Z"
+                  />
+                  <path
+                    d="M35.4359 28.101L49.4668 31.8591L51.2287 25.2645L37.1978 21.5065C35.9965 21.186 34.9954 20.4167 34.3708 19.335C33.7461 18.2613 33.586 17.0033 33.9063 15.8013L37.6623 1.76283L31.0713 0L27.3153 14.0385L35.4279 28.093L35.4359 28.101Z"
+                  />
+                  <path
+                    d="M15.7912 28.101L1.76028 31.8591L-0.00158691 25.2645L14.0293 21.5065C15.2306 21.186 16.2316 20.4167 16.8563 19.335C17.4809 18.2613 17.6411 17.0033 17.3208 15.8013L13.5648 1.76283L20.1558 0L23.9118 14.0385L15.7992 28.093L15.7912 28.101Z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <strong>Abstract Chad Score</strong>
+                <p>AGW reputation analytics</p>
+              </div>
+            </div>
+            <div class="profile-chip" id="preview-handle">@pending</div>
+          </div>
+
+          <div class="score-card-main">
+            <div class="score-copy">
+              <p class="mini-label">Chad Score</p>
+              <div class="hero-score">
+                <span id="score-value">0</span>
+                <small>out of 100</small>
+              </div>
+              <div class="tier-pill" id="score-tier">Pending</div>
+            </div>
+
+            <div class="score-ring-wrap">
+              <div class="score-mascot-stack">
+                <div class="score-mascot-panel">
+                  <img id="score-ring-mascot" class="score-ring-mascot" src="./assets/npc.png?v=6.6.0" alt="" aria-hidden="true" />
+                </div>
+                <div class="tier-panel" id="score-tier-panel">Pending</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mini-metrics">
+            <article class="mini-metric">
+              <strong id="badges-count">0</strong>
+              <span>Portal Tier</span>
+            </article>
+            <article class="mini-metric">
+              <strong id="xp-count">0</strong>
+              <span>Discord Role</span>
+            </article>
+            <article class="mini-metric">
+              <strong id="activity-count">0</strong>
+              <span>Onchain</span>
+            </article>
+            <article class="mini-metric">
+              <strong id="social-count">0</strong>
+              <span>Social</span>
+            </article>
+          </div>
+
+          <div class="metric-grid hidden-metrics">
+            <article class="metric">
+              <strong id="badges-count-clone">0</strong>
+              <span>Portal Tier</span>
+              <small id="badges-note">No tier selected</small>
+            </article>
+            <article class="metric">
+              <strong id="xp-count-clone">0</strong>
+              <span>Discord Role</span>
+              <small id="xp-note">No role selected</small>
+            </article>
+            <article class="metric">
+              <strong id="activity-count-clone">0</strong>
+              <span>Onchain</span>
+              <small id="activity-note">Wallet tx count</small>
+            </article>
+            <article class="metric">
+              <strong id="social-count-clone">0</strong>
+              <span>Social</span>
+              <small id="social-note">Estimated Abstract posts</small>
+            </article>
+          </div>
+
+          <div class="summary-line">
+            <p id="score-summary" class="summary"></p>
+          </div>
+
+          <div class="signal-grid hidden-signals" id="bars"></div>
+
+          <div class="result-footer">
+            <span id="preview-tier">Pending</span>
+            <span id="preview-badges">0 badges</span>
+            <span id="preview-xp">0 XP</span>
+            <span id="preview-posts">0 posts</span>
+            <span id="preview-discord">0 roles</span>
+          </div>
+        </article>
+
+        <div class="result-actions">
+          <button id="download-card" type="button" class="ghost-action">Download Card</button>
+          <button id="copy-card" type="button" class="ghost-action">Copy Card</button>
+          <button id="share-x" type="button">Share on X</button>
+        </div>
+
+        <section class="detail-section">
+          <article class="calendar-card">
+            <div class="section-heading">
+              <div>
+                <p class="section-kicker">Wallet Signal</p>
+                <h3>Activity Calendar</h3>
+                <p>Wallet activity density across recent weeks</p>
+              </div>
+              <div class="section-chip">Onchain rhythm</div>
+            </div>
+            <div id="calendar" class="calendar"></div>
+            <div id="calendar-tooltip" class="calendar-tooltip hidden" role="status" aria-live="polite"></div>
+            <div class="calendar-legend">
+              <span>Less</span>
+              <div class="legend-scale">
+                <i></i><i></i><i></i><i></i><i></i>
+              </div>
+              <span>More</span>
+            </div>
+          </article>
+
+          <article class="analytics-card">
+            <div class="section-heading">
+              <div>
+                <p class="section-kicker">Signal Layers</p>
+                <h3>Detailed Analytics</h3>
+                <p>Wallet, X, and Discord signals combined</p>
+              </div>
+              <div class="section-chip">Unified profile</div>
+            </div>
+            <div id="detail-grid" class="detail-grid"></div>
+          </article>
+        </section>
+      </section>
+
+      <section class="tiers-section">
+        <p class="tiers-kicker">Score Tiers</p>
+        <div class="tiers-grid">
+          <article class="tier-card">
+            <div class="penguin-badge muted">
+              <img src="./assets/npc.png?v=3.5.0" alt="NPC Chad" class="penguin-img" />
+            </div>
+            <strong>NPC Chad</strong>
+            <span>1-20</span>
+            <p>Just arrived. Barely touched Abstract.</p>
+          </article>
+          <article class="tier-card">
+            <div class="penguin-badge soft">
+              <img src="./assets/curious.png?v=3.5.0" alt="Explorer Chad" class="penguin-img" />
+            </div>
+            <strong>Explorer Chad</strong>
+            <span>21-40</span>
+            <p>Testing the waters and starting to show signal.</p>
+          </article>
+          <article class="tier-card">
+            <div class="penguin-badge mid">
+              <img src="./assets/ninja.png?v=5.5.0" alt="Ninja Chad" class="penguin-img" />
+            </div>
+            <strong>Ninja Chad</strong>
+            <span>41-60</span>
+            <p>Regular activity, real wallet and social momentum.</p>
+          </article>
+          <article class="tier-card">
+            <div class="penguin-badge bright">
+              <img src="./assets/knight.png?v=3.5.0" alt="Warrior Chad" class="penguin-img" />
+            </div>
+            <strong>Warrior Chad</strong>
+            <span>61-80</span>
+            <p>Deep engagement across AGW, Portal, and social presence.</p>
+          </article>
+          <article class="tier-card">
+            <div class="penguin-badge max">
+              <img src="./assets/king.png?v=3.5.0" alt="King Chad" class="penguin-img" />
+            </div>
+            <strong>King Chad</strong>
+            <span>81-100</span>
+            <p>Top shelf citizen with elite ecosystem aura.</p>
+          </article>
+        </div>
+      </section>
+
+      <canvas id="share-card" width="1200" height="675" class="hidden"></canvas>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script type="module" src="./app.js?v=5.6.0"></script>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+.env
+.venv/
+.venv312/
+__pycache__/
+*.pyc
+accounts.db
+outputs/
+work/social-cache.json
+work/timeline.json
+work/timeline-fresh.json
+work/ninja-original.png
+work/test_twikit.py
+work/x-main.js
+.DS_Store
