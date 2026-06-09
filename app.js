@@ -913,8 +913,14 @@ async function analyzeProfile({ wallet, handle, discord, portalTierSelect, pudgy
 
   try {
     const onchainMeta = await fetchOnchainMeta(wallet);
-    if (Number.isFinite(Number(onchainMeta?.totalTxCount))) {
-      indexedTxCount = Number(onchainMeta.totalTxCount);
+    const rawTotalTxCount = onchainMeta?.totalTxCount;
+    if (
+      rawTotalTxCount !== null &&
+      rawTotalTxCount !== undefined &&
+      rawTotalTxCount !== "" &&
+      Number.isFinite(Number(rawTotalTxCount))
+    ) {
+      indexedTxCount = Number(rawTotalTxCount);
     }
   } catch (err) {
     console.warn("On-chain meta lookup failed:", err);
