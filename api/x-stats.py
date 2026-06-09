@@ -105,6 +105,9 @@ async def run_search(handle: str):
             quotes = sum(getattr(tweet, "quoteCount", 0) or 0 for tweet in tweets)
             views = sum(int(getattr(tweet, "viewCount", 0) or 0) for tweet in tweets)
 
+            if fetched_count == 0 and not tweets:
+                raise RuntimeError("Search returned no results")
+
             return {
                 "handle": f"@{handle}",
                 "query": query,

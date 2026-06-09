@@ -206,6 +206,15 @@ async function fetchXStats(handle) {
   return payload;
 }
 
+async function fetchOnchainMeta(wallet) {
+  const response = await fetch(`/api/calendar?wallet=${encodeURIComponent(wallet)}`);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.error || "Failed to fetch on-chain meta");
+  }
+  return payload;
+}
+
 function formatMetricValue(value, formatter = null) {
   if (value === null || value === undefined) return "N/A";
   if (formatter) return formatter(value);
@@ -856,6 +865,7 @@ async function analyzeProfile({ wallet, handle, discord, portalTierSelect, pudgy
   }
 
   const walletTransactions = mainnetTxCount + testnetTxCount;
+  let indexedTxCount = walletTransactions;
   let abstractTweetCount = 0;
   let twitterEngagement = 0;
   let twitterLikes = 0;
@@ -900,6 +910,15 @@ async function analyzeProfile({ wallet, handle, discord, portalTierSelect, pudgy
     setStatus("Social data is currently unavailable!");
   }
   await delay(250);
+
+  try {
+    const onchainMeta = await fetchOnchainMeta(wallet);
+    if (Number.isFinite(Number(onchainMeta?.totalTxCount))) {
+      indexedTxCount = Number(onchainMeta.totalTxCount);
+    }
+  } catch (err) {
+    console.warn("On-chain meta lookup failed:", err);
+  }
 
   const cachedCalendar = getCachedRealCalendar(wallet, mainnetTxCount, testnetTxCount);
   const {
@@ -1068,6 +1087,7 @@ async function analyzeProfile({ wallet, handle, discord, portalTierSelect, pudgy
     engagementIndex,
     discordRoleCount,
     walletTransactions,
+    indexedTxCount,
     activeDays,
     activeWeeks,
     activeMonths,
@@ -1198,7 +1218,7 @@ function renderAnalysis(profile) {
   document.querySelector("#preview-badges").textContent = `Portal ${profile.portalTier}`;
   document.querySelector("#preview-xp").textContent = `Discord ${formatDiscordRoles(profile.selectedDiscordRoles)}`;
   document.querySelector("#preview-posts").textContent = `Social - ${profile.socialStatus === "unavailable" ? "N/A" : profile.abstractTweetCount}`;
-  document.querySelector("#preview-discord").textContent = `On-Chain - ${profile.walletTransactions}`;
+  document.querySelector("#preview-discord").textContent = `On-Chain - ${profile.indexedTxCount}`;
   if (scoreCardMascotImg) {
     scoreCardMascotImg.src = scoreCardMascotByTier[profile.tier] || scoreCardMascotByTier["NPC Chad"];
   }
@@ -1210,11 +1230,11 @@ function renderAnalysis(profile) {
   document.querySelector("#badges-note").textContent = "User-selected portal tier";
 
   document.querySelector("#xp-count").textContent = formatDiscordRoles(profile.selectedDiscordRoles);
-  document.querySelector("#activity-count").textContent = profile.walletTransactions.toLocaleString();
+  document.querySelector("#activity-count").textContent = profile.indexedTxCount.toLocaleString();
   document.querySelector("#social-count").textContent = profile.socialStatus === "unavailable" ? "N/A" : profile.abstractTweetCount.toLocaleString();
 
   document.querySelector("#xp-note").textContent = "Selected Discord role input";
-  document.querySelector("#activity-note").textContent = "Total wallet tx count used in scoring";
+  document.querySelector("#activity-note").textContent = "Indexed explorer total transaction count";
   document.querySelector("#social-note").textContent =
     profile.socialStatus === "stale"
       ? "Cached @AbstractChain social snapshot"
@@ -1344,7 +1364,7 @@ function renderDetailCards(profile) {
     { kicker: "AGW", value: profile.testnetIsContract ? "Yes" : "No", label: "Testnet AGW Contract" },
     { kicker: "Token", value: formatCompactNumber(profile.penguCount), label: "PENGU Balance", scoreBadge: profile.scoreBreakdown.onchain.penguScore > 0 ? `+${profile.scoreBreakdown.onchain.penguScore} pts` : "" },
     { kicker: "NFT", value: profile.absPremiumNftCount.toString(), label: "Premium NFT Count" },
-    { kicker: "Wallet", value: profile.walletTransactions.toLocaleString(), label: "Total Nonce Across Networks", scoreBadge: profile.scoreBreakdown.onchain.badgesBonus > 0 ? `+${profile.scoreBreakdown.onchain.badgesBonus} pts` : "" },
+    { kicker: "Wallet", value: profile.indexedTxCount.toLocaleString(), label: "Explorer Total Transactions", scoreBadge: profile.scoreBreakdown.onchain.badgesBonus > 0 ? `+${profile.scoreBreakdown.onchain.badgesBonus} pts` : "" },
     { kicker: "Portal", value: profile.portalTier, label: "Selected Portal Tier", scoreBadge: profile.scoreBreakdown.portal.total > 0 ? `+${profile.scoreBreakdown.portal.total} pts` : "" },
     { kicker: "Discord", value: formatDiscordRoles(profile.selectedDiscordRoles), label: "Selected Discord Roles", scoreBadge: profile.scoreBreakdown.discord.total > 0 ? `+${profile.scoreBreakdown.discord.total} pts` : "" },
     { kicker: "Social", value: formatMetricValue(profile.socialStatus === "unavailable" ? null : profile.abstractTweetCount), label: "@AbstractChain Mention Tweets", scoreBadge: profile.scoreBreakdown.twitter.total > 0 ? `+${Math.round(profile.scoreBreakdown.twitter.total * 10) / 10}` : "" },
@@ -1565,7 +1585,7 @@ function buildShareCopy(profile) {
     "Checked my wallet, social, and Portal signal through the Abstract Chad scanner to see how loud the aura really is.",
     `• ${formatScoreValue(profile.totalScore)}/100 - ${profile.tier}`,
     `• Portal ${profile.portalTier} + Discord ${formatDiscordRoles(profile.selectedDiscordRoles)}`,
-    `• On-Chain ${profile.walletTransactions.toLocaleString()} + Social ${socialValue} @AbstractChain mentions`,
+    `• On-Chain ${profile.indexedTxCount.toLocaleString()} + Social ${socialValue} @AbstractChain mentions`,
     "",
     "Run yours and see if your profile is actually chad-coded.",
     "",

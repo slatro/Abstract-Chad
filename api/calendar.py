@@ -7,6 +7,7 @@ from urllib.request import Request, urlopen
 
 
 WALLET_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
+TOTAL_TX_RE = re.compile(r"Latest\s+\d+\s+from a total of\s+([\d,]+)\s+transactions", re.IGNORECASE)
 ROW_RE = re.compile(
     r"<tr>\s*<td><button[\s\S]*?<td class='showDate[^>]*><span[^>]*>(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})</span></td>[\s\S]*?data-highlight-target=\"(0x[a-fA-F0-9]{40})\"[\s\S]*?<td class=\"text-center\">[\s\S]*?data-highlight-target=\"(0x[a-fA-F0-9]{40})\"",
     re.MULTILINE,
@@ -17,8 +18,12 @@ def fetch_text(url: str) -> str:
     req = Request(
         url,
         headers={
-            "user-agent": "Mozilla/5.0",
-            "accept": "text/html,application/xhtml+xml",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "accept-language": "en-US,en;q=0.9",
+            "cache-control": "no-cache",
+            "pragma": "no-cache",
+            "referer": "https://abscan.org/",
         },
     )
     with urlopen(req, timeout=25) as res:
@@ -28,6 +33,16 @@ def fetch_text(url: str) -> str:
 def extract_total_pages(html: str) -> int:
     match = re.search(r"Page\s+1\s+of\s+(\d+)", html, re.IGNORECASE)
     return int(match.group(1)) if match else 1
+
+
+def extract_total_tx_count(html: str):
+    match = TOTAL_TX_RE.search(html)
+    if not match:
+        return None
+    try:
+        return int(match.group(1).replace(",", ""))
+    except ValueError:
+        return None
 
 
 def extract_rows(html: str):
@@ -49,6 +64,7 @@ def fetch_calendar(wallet: str):
 
     first_page_html = fetch_text(f"https://abscan.org/txs?a={quote(wallet)}")
     total_pages = extract_total_pages(first_page_html)
+    total_tx_count = extract_total_tx_count(first_page_html)
     max_pages = min(total_pages, 40)
     counts = {}
 
@@ -84,6 +100,7 @@ def fetch_calendar(wallet: str):
         "wallet": wallet,
         "source": "abscan",
         "status": "ready",
+        "totalTxCount": total_tx_count,
         "dailyCounts": counts,
     }
 
@@ -108,6 +125,7 @@ class handler(BaseHTTPRequestHandler):
                     "source": "abscan",
                     "status": "unavailable",
                     "warning": str(exc) or "Calendar provider failed",
+                    "totalTxCount": None,
                     "dailyCounts": {},
                 },
             )
