@@ -1,26 +1,26 @@
 # Abstract Chad
 
-Abstract Chad, bir `AGW` adresi ve `X` handle'i icin on-chain aktivite, Portal tier, Discord role ve `@AbstractChain` mention social sinyalini tarayip paylasilabilir bir skor karti ureten local-first bir web app'tir.
+Abstract Chad is a local-first web app that scans an `AGW` wallet address and an `X` handle, then turns on-chain activity, Portal tier, Discord role, and `@AbstractChain` social mentions into a shareable score card.
 
-## Neler Var
+## Features
 
-- Shareable `Abstract Chad Score` karti
-- Gercek `@AbstractChain` mention aramasi
-- Coklu scraper hesap havuzu (`primary + fallback`)
-- `Abscan` tabanli activity calendar
+- Shareable `Abstract Chad Score` card
+- Real `@AbstractChain` mention search
+- Multi-account scraper pool (`primary + fallback`)
+- `Abscan`-based activity calendar
 - PNG export
-- Hazir X share metni
+- Ready-to-share X post copy
 
 ## Stack
 
 - `index.html` / `styles.css` / `app.js`
-- `server.js` ile local API + static server
-- Python `twscrape` ile social search
-- `Abscan` HTML parse ile wallet activity calendar
+- `server.js` for the local API + static server
+- Python `twscrape` for social search
+- `Abscan` HTML parsing for wallet activity calendar
 
-## Gerekli Kurulum
+## Setup
 
-### 1. Python bagimliligi
+### 1. Install Python dependency
 
 ```bash
 python3 -m venv .venv312
@@ -28,70 +28,70 @@ source .venv312/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Env ayari
+### 2. Configure env variables
 
-`.env.example` dosyasini kopyalayip `.env` olustur:
+Copy `.env.example` and create a `.env` file:
 
 ```bash
 cp .env.example .env
 ```
 
-Gerekli alanlar:
+Required fields:
 
 - `X_SCRAPER_USERNAME_1`
 - `X_AUTH_TOKEN_1`
 - `X_CT0_1`
 
-Opsiyonel ikinci fallback hesap:
+Optional secondary fallback account:
 
 - `X_SCRAPER_USERNAME_2`
 - `X_AUTH_TOKEN_2`
 - `X_CT0_2`
 
-## Yerelde Calistirma
+## Run Locally
 
 ```bash
 node server.js
 ```
 
-Sonra:
+Then open:
 
 ```bash
 http://127.0.0.1:4176
 ```
 
-## Social Mantigi
+## Social Logic
 
-Social query su sekilde calisir:
+The social query runs in this form:
 
 ```text
 from:<handle> @AbstractChain -filter:replies -filter:nativeretweets
 ```
 
-Akis:
+Flow:
 
-1. once cache kontrol edilir
-2. sonra scraper account pool ile canli sorgu denenir
-3. primary fail olursa ikinci hesap kullanilir
-4. ikisi de fail olursa cache varsa stale veri doner
+1. Check cache first
+2. Try a live query through the scraper account pool
+3. If the primary account fails, fall back to the secondary account
+4. If both fail, return stale cached data when available
 
-## On-Chain Mantigi
+## On-Chain Logic
 
-- mainnet/testnet nonce
-- AGW contract kontrolu
+- Mainnet / testnet nonce
+- AGW contract detection
 - PENGU balance
-- `Abscan` transaction history ile activity calendar
+- Activity calendar built from `Abscan` transaction history
 
-## Dosyalar
+## File Map
 
-- `index.html`: uygulama yapisi
-- `styles.css`: UI / export stilleri
-- `app.js`: skor mantigi, render, export, share
+- `index.html`: app structure
+- `styles.css`: UI and export styling
+- `app.js`: scoring logic, rendering, export, and share flow
 - `server.js`: local API
 - `work/social-provider.js`: twscrape search provider
 - `work/twscrape_mentions.py`: mention search script
 
-## Notlar
+## Notes
 
-- `.env`, `accounts.db`, local caches ve `outputs/` git'e dahil edilmez.
-- Uretimde frontend `Vercel`de, scraper backend ise daha stabil bir server ortaminda (`Railway`, `Render`, `Fly`) daha saglikli calisir.
+- `.env`, `accounts.db`, local caches, and `outputs/` are not committed to git.
+- In production, the frontend can live on `Vercel`, while the scraper backend is more reliable on a persistent server environment such as `Railway`, `Render`, or `Fly`.
