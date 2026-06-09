@@ -25,7 +25,7 @@ Abstract Chad is a local-first web app that scans an `AGW` wallet address and an
 ```bash
 python3 -m venv .venv312
 source .venv312/bin/activate
-pip install -r work/requirements.txt
+pip install -r requirements.txt
 ```
 
 ### 2. Configure env variables
