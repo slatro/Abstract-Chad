@@ -60,12 +60,12 @@ def extract_rows(html: str):
 
 def fetch_calendar(wallet: str):
     normalized_wallet = wallet.lower()
-    cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=364)
+    cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=179)
 
     first_page_html = fetch_text(f"https://abscan.org/txs?a={quote(wallet)}")
     total_pages = extract_total_pages(first_page_html)
     total_tx_count = extract_total_tx_count(first_page_html)
-    max_pages = min(total_pages, 40)
+    max_pages = min(total_pages, 12)
     counts = {}
 
     for page in range(1, max_pages + 1):

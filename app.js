@@ -617,7 +617,7 @@ function deserializeCalendarCache(serialized) {
 }
 
 function getCalendarCacheKey(wallet, mainnetTxCount, testnetTxCount) {
-  return `abstract-calendar-v2:${wallet.toLowerCase()}:${mainnetTxCount}:${testnetTxCount}`;
+  return `abstract-calendar-v3:${wallet.toLowerCase()}:${mainnetTxCount}:${testnetTxCount}`;
 }
 
 function getCachedRealCalendar(wallet, mainnetTxCount = 0, testnetTxCount = 0) {
@@ -641,7 +641,7 @@ async function buildRealCalendar(wallet, mainnetTxCount = 0, testnetTxCount = 0)
     throw new Error(payload?.warning || "Calendar provider unavailable");
   }
 
-  const calendar = buildCalendarFromDailyCounts(payload.dailyCounts, 365);
+  const calendar = buildCalendarFromDailyCounts(payload.dailyCounts, 180);
   try {
     localStorage.setItem(cacheKey, JSON.stringify(serializeCalendarCache(calendar)));
   } catch {}
@@ -657,8 +657,8 @@ async function fetchCalendarSnapshot(wallet) {
   return payload;
 }
 
-function buildCalendarFromDailyCounts(dailyCounts = {}, dayCount = 365) {
-  const { start, end, first, last } = buildEmptyCalendarRange(365);
+function buildCalendarFromDailyCounts(dailyCounts = {}, dayCount = 180) {
+  const { start, end, first, last } = buildEmptyCalendarRange(dayCount);
   const days = [];
   for (let cursor = new Date(first); cursor <= last; cursor.setDate(cursor.getDate() + 1)) {
     const date = new Date(cursor);

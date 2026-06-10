@@ -155,14 +155,14 @@ async function fetchAbscanCalendar(wallet) {
   const normalizedWallet = wallet.toLowerCase();
   const cutoff = new Date();
   cutoff.setHours(0, 0, 0, 0);
-  cutoff.setDate(cutoff.getDate() - 364);
+  cutoff.setDate(cutoff.getDate() - 179);
   const cutoffTime = cutoff.getTime();
 
   const firstPageHtml = await fetchText(`https://abscan.org/txs?a=${encodeURIComponent(wallet)}`);
   const totalPages = extractTotalPages(firstPageHtml);
   const totalTxCount = extractTotalTxCount(firstPageHtml);
   const counts = {};
-  const maxPages = Math.min(totalPages, 40);
+  const maxPages = Math.min(totalPages, 12);
 
   for (let page = 1; page <= maxPages; page += 1) {
     const html = page === 1 ? firstPageHtml : await fetchText(`https://abscan.org/txs?a=${encodeURIComponent(wallet)}&p=${page}`);
