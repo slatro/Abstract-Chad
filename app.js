@@ -1598,7 +1598,7 @@ function buildShareCopy(profile) {
     "",
     "Run yours and see your Abstract Chad profile!",
     "",
-    "Built by @slatro_eth ",
+    "Built by @slatro_eth ✳️",
   ].join("\n");
 }
 
