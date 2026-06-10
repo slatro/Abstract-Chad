@@ -1341,6 +1341,69 @@ function renderCalendarLoading() {
   `;
 }
 
+async function buildCalendarFromRpcLinear(wallet, mainnetTxCount) {
+  // Abstract mainnet has ~1 second block time.
+  // We approximate past block numbers linearly: past_block ≈ current_block - (days_ago × 86400)
+  // This avoids slow binary search and only needs 27 parallel RPC calls.
+  const BLOCKS_PER_DAY = 86400;
+  const WEEKS = 26; // 26 weeks = ~6 months
+
+  const latestBlock = await getLatestBlockNumber(ABS_MAINNET_RPC);
+  if (!latestBlock || mainnetTxCount === 0) return null;
+
+  // Build boundary block numbers: one per week boundary + today
+  const boundaryBlocks = [];
+  for (let w = WEEKS; w >= 0; w--) {
+    boundaryBlocks.push(Math.max(1, latestBlock - Math.round(w * 7 * BLOCKS_PER_DAY)));
+  }
+
+  // Fetch nonce at each boundary in parallel (fast — small payload, no binary search)
+  const nonces = await Promise.all(
+    boundaryBlocks.map((block) => getTxCountAtBlock(ABS_MAINNET_RPC, wallet, block))
+  );
+
+  // Build daily counts by distributing each week's tx count across its days
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const dailyCounts = {};
+  const seed = wallet.toLowerCase();
+
+  for (let w = 0; w < WEEKS; w++) {
+    const weekTxs = Math.max(0, (nonces[w + 1] || 0) - (nonces[w] || 0));
+    if (weekTxs === 0) continue;
+
+    // Distribute across the 7 days of this week using seeded variation
+    const daysAgoEnd = (WEEKS - 1 - w) * 7;
+    let remaining = weekTxs;
+    const weights = [];
+    for (let d = 0; d < 7; d++) {
+      weights.push(1 + (seededHash(`${seed}:w${w}:d${d}`) % 5));
+    }
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+    for (let d = 0; d < 7; d++) {
+      const daysAgo = daysAgoEnd + (6 - d);
+      const date = new Date(today);
+      date.setUTCDate(date.getUTCDate() - daysAgo);
+      const cutoff = new Date(today);
+      cutoff.setUTCDate(cutoff.getUTCDate() - 179);
+      if (date < cutoff) continue;
+
+      const dayTxs = d === 6
+        ? remaining
+        : Math.min(remaining, Math.round((weights[d] / totalWeight) * weekTxs));
+      remaining -= dayTxs;
+
+      if (dayTxs > 0) {
+        const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+        dailyCounts[key] = (dailyCounts[key] || 0) + dayTxs;
+      }
+    }
+  }
+
+  return buildCalendarFromDailyCounts(dailyCounts, 180);
+}
+
 async function hydrateCalendar(profile) {
   const jobId = ++state.calendarJobId;
   try {
@@ -1351,26 +1414,37 @@ async function hydrateCalendar(profile) {
     }
     renderCalendar(calendar);
   } catch (err) {
-    console.error("Deferred calendar load error:", err);
+    console.error("API calendar failed, trying RPC fallback:", err);
     if (jobId !== state.calendarJobId) return;
-    // Fallback: show seeded simulation calendar so the UI isn't broken.
-    // This uses the wallet's total tx count to produce a realistic heatmap.
+
+    // Fallback 1: RPC linear interpolation — works for any wallet size, ~300ms
     try {
-      const totalTxs = (profile.indexedTxCount || 0) + (profile.mainnetTxCount || 0) + (profile.testnetTxCount || 0);
-      const seed = profile.wallet.toLowerCase();
-      const fallbackCalendar = buildCalendar(seed, totalTxs);
+      const rpcCalendar = await buildCalendarFromRpcLinear(profile.wallet, profile.mainnetTxCount);
+      if (jobId !== state.calendarJobId) return;
+      if (rpcCalendar) {
+        if (state.lastAnalysis && state.lastAnalysis.wallet === profile.wallet) {
+          state.lastAnalysis.calendar = rpcCalendar;
+        }
+        renderCalendar(rpcCalendar);
+        return;
+      }
+    } catch (rpcErr) {
+      console.warn("RPC calendar fallback failed:", rpcErr);
+    }
+
+    // Fallback 2: Seeded simulation using wallet tx count
+    if (jobId !== state.calendarJobId) return;
+    try {
+      const totalTxs = (profile.indexedTxCount || 0) + (profile.mainnetTxCount || 0);
+      const simCalendar = buildCalendar(profile.wallet.toLowerCase(), totalTxs);
       if (jobId !== state.calendarJobId) return;
       if (state.lastAnalysis && state.lastAnalysis.wallet === profile.wallet) {
-        state.lastAnalysis.calendar = fallbackCalendar;
+        state.lastAnalysis.calendar = simCalendar;
       }
-      renderCalendar(fallbackCalendar);
+      renderCalendar(simCalendar);
     } catch {
       if (jobId !== state.calendarJobId) return;
-      calendarNode.innerHTML = `
-        <div class="calendar-loading">
-          <span>Calendar data is temporarily unavailable.</span>
-        </div>
-      `;
+      calendarNode.innerHTML = `<div class="calendar-loading"><span>Calendar data is temporarily unavailable.</span></div>`;
     }
   }
 }
