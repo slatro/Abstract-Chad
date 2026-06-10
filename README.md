@@ -15,6 +15,7 @@ Abstract Chad is a local-first web app that scans an `AGW` wallet address and an
 
 - `index.html` / `styles.css` / `app.js`
 - `server.js` for the local API + static server
+- `backend/server.js` for separate Railway/Render deployment
 - Python `twscrape` for social search
 - `Abscan` HTML parsing for wallet activity calendar
 
@@ -59,6 +60,51 @@ Then open:
 ```bash
 http://127.0.0.1:4176
 ```
+
+## Deploy Split Setup
+
+Recommended production split:
+
+- `Vercel` for the static frontend
+- `Railway` / `Render` / `Fly.io` for the scraper + calendar backend
+
+### Frontend
+
+The frontend reads `window.__ABSTRACT_CHAD_API_BASE__` from [api-config.js](/Users/emreoktem/Documents/Codex/2026-06-08/kral-senin-kotan-dolunca-ben-dosyay/api-config.js).
+
+For local same-origin usage it can stay empty:
+
+```js
+window.__ABSTRACT_CHAD_API_BASE__ = "";
+```
+
+For production, point it at the backend origin:
+
+```js
+window.__ABSTRACT_CHAD_API_BASE__ = "https://your-backend.up.railway.app";
+```
+
+### Backend
+
+Deploy the [backend](/Users/emreoktem/Documents/Codex/2026-06-08/kral-senin-kotan-dolunca-ben-dosyay/backend) folder as a Node service.
+
+Start command:
+
+```bash
+node server.js
+```
+
+Required backend env vars:
+
+- `X_SCRAPER_USERNAME_1`
+- `X_AUTH_TOKEN_1`
+- `X_CT0_1`
+- optional fallback:
+  - `X_SCRAPER_USERNAME_2`
+  - `X_AUTH_TOKEN_2`
+  - `X_CT0_2`
+- optional:
+  - `X_SEARCH_LIMIT`
 
 ## Social Logic
 

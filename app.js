@@ -5,6 +5,7 @@ const barsNode = document.querySelector("#bars");
 const detailGridNode = document.querySelector("#detail-grid");
 const calendarNode = document.querySelector("#calendar");
 const calendarTooltipNode = document.querySelector("#calendar-tooltip");
+const API_BASE = String(window.__ABSTRACT_CHAD_API_BASE__ || "").replace(/\/+$/, "");
 const shareButton = document.querySelector("#share-x");
 const downloadButton = document.querySelector("#download-card");
 const copyButton = document.querySelector("#copy-card");
@@ -198,7 +199,7 @@ async function validateHandle(val) {
 }
 
 async function fetchXStats(handle) {
-  const response = await fetch(`/api/x-stats?handle=${encodeURIComponent(handle)}`);
+  const response = await fetch(`${API_BASE}/api/x-stats?handle=${encodeURIComponent(handle)}`);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(payload?.error || "Failed to fetch X stats");
@@ -207,7 +208,7 @@ async function fetchXStats(handle) {
 }
 
 async function fetchOnchainMeta(wallet) {
-  const response = await fetch(`/api/calendar?wallet=${encodeURIComponent(wallet)}`);
+  const response = await fetch(`${API_BASE}/api/calendar?wallet=${encodeURIComponent(wallet)}`);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(payload?.error || "Failed to fetch on-chain meta");
@@ -648,7 +649,7 @@ async function buildRealCalendar(wallet, mainnetTxCount = 0, testnetTxCount = 0)
 }
 
 async function fetchCalendarSnapshot(wallet) {
-  const response = await fetch(`/api/calendar?wallet=${encodeURIComponent(wallet)}`);
+  const response = await fetch(`${API_BASE}/api/calendar?wallet=${encodeURIComponent(wallet)}`);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(payload?.error || "Failed to fetch calendar");
