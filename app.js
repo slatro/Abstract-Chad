@@ -640,6 +640,10 @@ async function buildRealCalendar(wallet, mainnetTxCount = 0, testnetTxCount = 0)
   if (!payload || payload.status !== "ready" || !payload.dailyCounts) {
     throw new Error(payload?.warning || "Calendar provider unavailable");
   }
+  // Empty dailyCounts means API timed out or scraped nothing → trigger fallback
+  if (Object.keys(payload.dailyCounts).length === 0) {
+    throw new Error("Calendar returned no data");
+  }
 
   const calendar = buildCalendarFromDailyCounts(payload.dailyCounts, 365);
   try {
@@ -1422,28 +1426,35 @@ async function hydrateCalendar(profile) {
     }
     renderCalendar(calendar);
   } catch (err) {
-    console.error("API calendar failed, trying RPC fallback:", err);
+    console.error("API calendar failed, trying fallback:", err);
     if (jobId !== state.calendarJobId) return;
 
-    // Fallback 1: RPC linear interpolation — works for any wallet size, ~300ms
-    try {
-      const rpcCalendar = await buildCalendarFromRpcLinear(profile.wallet, profile.mainnetTxCount);
-      if (jobId !== state.calendarJobId) return;
-      if (rpcCalendar) {
-        if (state.lastAnalysis && state.lastAnalysis.wallet === profile.wallet) {
-          state.lastAnalysis.calendar = rpcCalendar;
+    // For AGW smart contract wallets, eth_getTransactionCount won't work → skip RPC, go to simulation
+    const isAgw = profile.isContract;
+    const totalIndexed = profile.indexedTxCount || 0;
+
+    if (!isAgw && profile.mainnetTxCount > 0) {
+      // Fallback 1: RPC linear interpolation (works for EOA wallets)
+      try {
+        const rpcCalendar = await buildCalendarFromRpcLinear(profile.wallet, profile.mainnetTxCount, totalIndexed);
+        if (jobId !== state.calendarJobId) return;
+        if (rpcCalendar) {
+          if (state.lastAnalysis && state.lastAnalysis.wallet === profile.wallet) {
+            state.lastAnalysis.calendar = rpcCalendar;
+          }
+          renderCalendar(rpcCalendar);
+          return;
         }
-        renderCalendar(rpcCalendar);
-        return;
+      } catch (rpcErr) {
+        console.warn("RPC calendar fallback failed:", rpcErr);
       }
-    } catch (rpcErr) {
-      console.warn("RPC calendar fallback failed:", rpcErr);
     }
 
-    // Fallback 2: Seeded simulation using wallet tx count
+    // Fallback 2: Seeded simulation using real tx count → always shows data
     if (jobId !== state.calendarJobId) return;
     try {
-      const totalTxs = (profile.indexedTxCount || 0) + (profile.mainnetTxCount || 0);
+      // Use indexedTxCount (from abscan total) which is correct even for AGW wallets
+      const totalTxs = Math.max(totalIndexed, profile.mainnetTxCount || 0);
       const simCalendar = buildCalendar(profile.wallet.toLowerCase(), totalTxs);
       if (jobId !== state.calendarJobId) return;
       if (state.lastAnalysis && state.lastAnalysis.wallet === profile.wallet) {
