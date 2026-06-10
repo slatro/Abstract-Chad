@@ -1731,12 +1731,11 @@ function buildCalendar(seed, walletTransactions = 0) {
   last.setDate(last.getDate() + (6 - last.getDay()));
 
   const days = [];
-  
-  // Decide which days get activity based on the total transactions
+
+  // ── Low-tx wallets: pick specific active days ──────────────────────────────
   const activeDaysCount = Math.min(365, walletTransactions);
   const activeDaysSet = new Set();
-  
-  if (activeDaysCount > 0) {
+  if (walletTransactions <= 365 && activeDaysCount > 0) {
     let index = 0;
     while (activeDaysSet.size < activeDaysCount && index < 2000) {
       const idx = seededHash(`${seed}:active-day:${index}`) % 365;
@@ -1745,44 +1744,68 @@ function buildCalendar(seed, walletTransactions = 0) {
     }
   }
 
+  // ── High-tx wallets: precompute daily avg ──────────────────────────────────
+  // Show ~80-88% of txs distributed across ~90% of days (realistic – not all days active)
+  const targetTxs = Math.floor(walletTransactions * (0.80 + (seededHash(`${seed}:pct`) % 8) / 100));
+  const avgPerDay = walletTransactions > 365 ? Math.max(1, Math.floor(targetTxs / 328)) : 1;
+
   let dayIndex = 0;
   for (let cursor = new Date(first); cursor <= last; cursor.setDate(cursor.getDate() + 1)) {
     const date = new Date(cursor);
     const inRange = date >= start && date <= end;
-    
+
     let count = 0;
     if (inRange) {
-      if (activeDaysSet.has(dayIndex)) {
-        const daySeed = seededHash(`${seed}:count:${dayIndex}`);
-        const varSeed = seededHash(`${seed}:var:${dayIndex}`);
-
-        if (walletTransactions <= 365) {
-          // Low tx count: small random variation (1–3)
-          count = 1 + (daySeed % 3);
-        } else {
-          // High tx count: log-based base level + exponential seeded variation
-          // log10(46000/365) ≈ 2.1 → base ≈ 9
-          const logScale = Math.log10(walletTransactions / 365);
-          const base = Math.max(1, Math.round(logScale * 4.5)); // 1–13 for most wallets
-
-          // Seeded exponential-like variation: biased toward lower values
-          // varSeed % 1000 → 0-999; apply quadratic curve so most values < base
-          const t = (varSeed % 1000) / 999; // 0 to 1
-          const curve = t * t; // 0 to 1, quadratic — more small values
-          const scaledVar = 0.15 + curve * 1.85; // 0.15x to 2.0x
-
-          count = Math.max(1, Math.round(base * scaledVar));
+      if (walletTransactions <= 365) {
+        // ── Low-tx: simple 1-3 range for active days ──────────────────────
+        if (activeDaysSet.has(dayIndex)) {
+          count = 1 + (seededHash(`${seed}:count:${dayIndex}`) % 3);
         }
+      } else {
+        // ── High-tx: realistic 3-tier distribution ─────────────────────────
+        // 10% rest days, 15% spike, 30% high, 45% normal
+        const restS  = seededHash(`${seed}:rest:${dayIndex}`) % 100;
+        const typeS  = seededHash(`${seed}:type:${dayIndex}`) % 100;
+        const varNorm = (seededHash(`${seed}:var:${dayIndex}`) % 1000) / 999; // 0..1
+
+        if (restS >= 10) { // 90% active days
+          if (typeS < 15) {
+            // Spike day (15% of active): 2.5× – 5× average
+            count = Math.round(avgPerDay * (2.5 + varNorm * 2.5));
+          } else if (typeS < 45) {
+            // High day (30% of active): 1.2× – 2.5× average
+            count = Math.round(avgPerDay * (1.2 + varNorm * 1.3));
+          } else {
+            // Normal day (55% of active): 0.25× – 1.2× average, natural spread
+            count = Math.max(1, Math.round(avgPerDay * (0.25 + varNorm * 0.95)));
+          }
+        }
+        // else: rest day → count stays 0
       }
       dayIndex++;
     }
-    
-    days.push({
-      date,
-      inRange,
-      count,
-      level: inRange ? getCalendarLevel(count) : 0,
-    });
+
+    days.push({ date, inRange, count, level: 0 });
+  }
+
+  // ── Dynamic level scaling: levels relative to this wallet's own max ────────
+  // Ensures a high-tx wallet shows rich level 4-5 days, not everything level 1-2
+  const maxCount = days.reduce((m, d) => (d.inRange ? Math.max(m, d.count) : m), 0);
+  for (const day of days) {
+    if (!day.inRange) continue;
+    if (maxCount === 0 || day.count === 0) { day.level = 0; continue; }
+    if (walletTransactions <= 365) {
+      // Low-tx: use absolute thresholds (1→1, 2→2, 3→3)
+      day.level = getCalendarLevel(day.count);
+    } else {
+      // High-tx: scale relative to this wallet's max activity
+      const ratio = day.count / maxCount;
+      if (ratio > 0.75) day.level = 5;
+      else if (ratio > 0.50) day.level = 4;
+      else if (ratio > 0.28) day.level = 3;
+      else if (ratio > 0.10) day.level = 2;
+      else day.level = 1;
+    }
   }
 
   const weeks = [];
@@ -1813,6 +1836,7 @@ function buildCalendar(seed, walletTransactions = 0) {
 
   return { weeks, monthLabels };
 }
+
 
 function buildActivityCount(daySeed, date, endDate) {
   const daysAgo = Math.round((endDate - date) / 86400000);
