@@ -32,18 +32,17 @@ def fetch_text(url: str, timeout: int = 8) -> str:
 # ── Strategy 1: Etherscan-compatible JSON API ──────────────────────────────────
 def try_etherscan_api(wallet: str, cutoff: datetime) -> dict | None:
     """
-    Abscan supports Etherscan-compatible JSON API.
-    Returns up to 10,000 txs as JSON in a single fast request.
+    Abscan Etherscan-compatible JSON API at api.abscan.org.
+    Returns up to 10,000 txs as JSON in a single fast request (~1-2s).
     """
     try:
         url = (
-            f"https://abscan.org/api?module=account&action=txlist"
+            f"https://api.abscan.org/api?module=account&action=txlist"
             f"&address={quote(wallet)}&sort=desc&offset=10000&page=1"
         )
         raw = fetch_text(url, timeout=8)
         data = json.loads(raw)
 
-        # Etherscan API returns status "1" for success
         if str(data.get("status")) != "1":
             return None
         result = data.get("result")
@@ -60,14 +59,14 @@ def try_etherscan_api(wallet: str, cutoff: datetime) -> dict | None:
             except (ValueError, OSError):
                 continue
             if tx_date < cutoff:
-                # Results are sorted desc → once we pass cutoff we can stop
-                break
+                break  # sorted desc → safe to stop early
             key = tx_date.strftime("%Y-%m-%d")
             counts[key] = counts.get(key, 0) + 1
 
         return counts if counts else None
     except Exception:
         return None
+
 
 
 # ── Strategy 2: Parallel HTML scraping (fallback) ─────────────────────────────
