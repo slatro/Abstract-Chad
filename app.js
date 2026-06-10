@@ -1754,9 +1754,24 @@ function buildCalendar(seed, walletTransactions = 0) {
     if (inRange) {
       if (activeDaysSet.has(dayIndex)) {
         const daySeed = seededHash(`${seed}:count:${dayIndex}`);
-        count = 1 + (daySeed % 3);
-        if (walletTransactions > 365) {
-          count += Math.floor((walletTransactions - 365) / 100);
+        const varSeed = seededHash(`${seed}:var:${dayIndex}`);
+
+        if (walletTransactions <= 365) {
+          // Low tx count: small random variation (1–3)
+          count = 1 + (daySeed % 3);
+        } else {
+          // High tx count: log-based base level + exponential seeded variation
+          // log10(46000/365) ≈ 2.1 → base ≈ 9
+          const logScale = Math.log10(walletTransactions / 365);
+          const base = Math.max(1, Math.round(logScale * 4.5)); // 1–13 for most wallets
+
+          // Seeded exponential-like variation: biased toward lower values
+          // varSeed % 1000 → 0-999; apply quadratic curve so most values < base
+          const t = (varSeed % 1000) / 999; // 0 to 1
+          const curve = t * t; // 0 to 1, quadratic — more small values
+          const scaledVar = 0.15 + curve * 1.85; // 0.15x to 2.0x
+
+          count = Math.max(1, Math.round(base * scaledVar));
         }
       }
       dayIndex++;
@@ -1808,7 +1823,8 @@ function buildActivityCount(daySeed, date, endDate) {
 }
 
 function getCalendarLevel(count) {
-  if (count >= 6) return 4;
+  if (count >= 18) return 5;
+  if (count >= 9) return 4;
   if (count >= 4) return 3;
   if (count >= 2) return 2;
   if (count >= 1) return 1;
