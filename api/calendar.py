@@ -65,7 +65,10 @@ def fetch_calendar(wallet: str):
     first_page_html = fetch_text(f"https://abscan.org/txs?a={quote(wallet)}")
     total_pages = extract_total_pages(first_page_html)
     total_tx_count = extract_total_tx_count(first_page_html)
-    max_pages = min(total_pages, 12)
+    # High-volume wallets can have thousands of txs; allow up to 50 pages
+    # Each abscan page shows ~25 txs. 50 pages = ~1250 txs which is more than
+    # enough to cover 180 days for even very active wallets.
+    max_pages = min(total_pages, 50)
     counts = {}
 
     for page in range(1, max_pages + 1):
@@ -74,26 +77,24 @@ def fetch_calendar(wallet: str):
         if not rows:
             break
 
-        page_has_recent = False
+        all_rows_older_than_cutoff = True
         for row in rows:
             try:
                 tx_date = datetime.strptime(row["dateText"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
             except ValueError:
                 continue
 
-            if tx_date < cutoff:
-                continue
+            if tx_date >= cutoff:
+                all_rows_older_than_cutoff = False
+                is_wallet_out = row["from"].lower() == normalized_wallet
+                is_wallet_in = row["to"].lower() == normalized_wallet
+                if not is_wallet_out and not is_wallet_in:
+                    continue
+                key = row["dateText"][:10]
+                counts[key] = counts.get(key, 0) + 1
 
-            page_has_recent = True
-            is_wallet_out = row["from"].lower() == normalized_wallet
-            is_wallet_in = row["to"].lower() == normalized_wallet
-            if not is_wallet_out and not is_wallet_in:
-                continue
-
-            key = row["dateText"][:10]
-            counts[key] = counts.get(key, 0) + 1
-
-        if not page_has_recent:
+        # Only stop early when every tx on this page predates the 180-day window
+        if all_rows_older_than_cutoff:
             break
 
     return {

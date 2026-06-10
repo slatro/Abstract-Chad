@@ -1588,17 +1588,20 @@ function positionCalendarTooltip(event) {
 
 function buildShareCopy(profile) {
   const socialValue = profile.socialStatus === "unavailable" ? "N/A" : profile.abstractTweetCount.toLocaleString();
+  const portalDiscord = `Portal ${profile.portalTier} + Discord ${formatDiscordRoles(profile.selectedDiscordRoles)}`;
   return [
-    "Checked my wallet, social, and Portal signal through the Abstract Chad scanner to see how loud the aura really is.",
+    "Checked my wallet, socials and Portal score with: https://abstract-chad.vercel.app",
+    "",
     `• ${formatScoreValue(profile.totalScore)}/100 - ${profile.tier}`,
-    `• Portal ${profile.portalTier} + Discord ${formatDiscordRoles(profile.selectedDiscordRoles)}`,
+    `• ${portalDiscord}`,
     `• On-Chain ${profile.indexedTxCount.toLocaleString()} + Social ${socialValue} @AbstractChain mentions`,
     "",
-    "Run yours and see if your profile is actually chad-coded.",
+    "Run yours and see your Abstract Chad profile!",
     "",
     "Built by @slatro_eth ",
   ].join("\n");
 }
+
 
 function shortenWallet(wallet) {
   if (wallet.length <= 15) return wallet;
