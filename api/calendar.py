@@ -136,7 +136,7 @@ def try_html_scrape(wallet: str, normalized_wallet: str, cutoff: datetime) -> di
 # ── Main calendar builder ──────────────────────────────────────────────────────
 def fetch_calendar(wallet: str):
     normalized_wallet = wallet.lower()
-    cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=179)
+    cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=364)
 
     # Strategy 1: Fast JSON API (works within 10s Vercel timeout)
     counts = try_etherscan_api(wallet, cutoff)

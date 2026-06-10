@@ -641,7 +641,7 @@ async function buildRealCalendar(wallet, mainnetTxCount = 0, testnetTxCount = 0)
     throw new Error(payload?.warning || "Calendar provider unavailable");
   }
 
-  const calendar = buildCalendarFromDailyCounts(payload.dailyCounts, 180);
+  const calendar = buildCalendarFromDailyCounts(payload.dailyCounts, 365);
   try {
     localStorage.setItem(cacheKey, JSON.stringify(serializeCalendarCache(calendar)));
   } catch {}
@@ -1346,7 +1346,7 @@ async function buildCalendarFromRpcLinear(wallet, mainnetTxCount) {
   // We approximate past block numbers linearly: past_block ≈ current_block - (days_ago × 86400)
   // This avoids slow binary search and only needs 27 parallel RPC calls.
   const BLOCKS_PER_DAY = 86400;
-  const WEEKS = 26; // 26 weeks = ~6 months
+  const WEEKS = 52; // 52 weeks = 1 year
 
   const latestBlock = await getLatestBlockNumber(ABS_MAINNET_RPC);
   if (!latestBlock || mainnetTxCount === 0) return null;
@@ -1386,7 +1386,7 @@ async function buildCalendarFromRpcLinear(wallet, mainnetTxCount) {
       const date = new Date(today);
       date.setUTCDate(date.getUTCDate() - daysAgo);
       const cutoff = new Date(today);
-      cutoff.setUTCDate(cutoff.getUTCDate() - 179);
+      cutoff.setUTCDate(cutoff.getUTCDate() - 364);
       if (date < cutoff) continue;
 
       const dayTxs = d === 6
@@ -1401,7 +1401,7 @@ async function buildCalendarFromRpcLinear(wallet, mainnetTxCount) {
     }
   }
 
-  return buildCalendarFromDailyCounts(dailyCounts, 180);
+  return buildCalendarFromDailyCounts(dailyCounts, 365);
 }
 
 async function hydrateCalendar(profile) {

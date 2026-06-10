@@ -253,7 +253,7 @@ async function fetchAbscanCalendar(wallet) {
   const normalizedWallet = wallet.toLowerCase();
   const cutoff = new Date();
   cutoff.setHours(0, 0, 0, 0);
-  cutoff.setDate(cutoff.getDate() - 179);
+  cutoff.setDate(cutoff.getDate() - 364);
   const cutoffTime = cutoff.getTime();
 
   // ── Strategy 1: Etherscan-compatible JSON API (fastest, ~1s) ───────────────
