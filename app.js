@@ -1278,7 +1278,7 @@ function renderAnalysis(profile) {
 }
 
 function renderCalendar(calendar) {
-  const colors = ["rgba(56, 216, 135, 0.08)", "rgba(56, 216, 135, 0.3)", "rgba(56, 216, 135, 0.55)", "rgba(56, 216, 135, 0.8)", "#38d887"];
+  const colors = ["rgba(56, 216, 135, 0.08)", "rgba(56, 216, 135, 0.28)", "rgba(56, 216, 135, 0.52)", "rgba(56, 216, 135, 0.78)", "#38d887", "#1db866"];
   const months = document.createElement("div");
   months.className = "calendar-months";
 
