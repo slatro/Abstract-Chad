@@ -1426,17 +1426,15 @@ async function hydrateCalendar(profile) {
     }
     renderCalendar(calendar);
   } catch (err) {
-    console.error("API calendar failed, trying fallback:", err);
+    console.error("API calendar failed, trying RPC fallback:", err);
     if (jobId !== state.calendarJobId) return;
 
-    // For AGW smart contract wallets, eth_getTransactionCount won't work → skip RPC, go to simulation
-    const isAgw = profile.isContract;
-    const totalIndexed = profile.indexedTxCount || 0;
-
-    if (!isAgw && profile.mainnetTxCount > 0) {
-      // Fallback 1: RPC linear interpolation (works for EOA wallets)
+    // RPC fallback: Abstract native AA wallets have proper nonces via eth_getTransactionCount
+    // Works for both EOA and smart contract (AGW) accounts on Abstract
+    const totalTxs = Math.max(profile.indexedTxCount || 0, profile.mainnetTxCount || 0);
+    if (totalTxs > 0) {
       try {
-        const rpcCalendar = await buildCalendarFromRpcLinear(profile.wallet, profile.mainnetTxCount, totalIndexed);
+        const rpcCalendar = await buildCalendarFromRpcLinear(profile.wallet, profile.mainnetTxCount, profile.indexedTxCount || 0);
         if (jobId !== state.calendarJobId) return;
         if (rpcCalendar) {
           if (state.lastAnalysis && state.lastAnalysis.wallet === profile.wallet) {
@@ -1450,24 +1448,11 @@ async function hydrateCalendar(profile) {
       }
     }
 
-    // Fallback 2: Seeded simulation using real tx count → always shows data
+    // All real data sources failed – no fake simulation, just show unavailable
     if (jobId !== state.calendarJobId) return;
-    try {
-      // Use indexedTxCount (from abscan total) which is correct even for AGW wallets
-      const totalTxs = Math.max(totalIndexed, profile.mainnetTxCount || 0);
-      const simCalendar = buildCalendar(profile.wallet.toLowerCase(), totalTxs);
-      if (jobId !== state.calendarJobId) return;
-      if (state.lastAnalysis && state.lastAnalysis.wallet === profile.wallet) {
-        state.lastAnalysis.calendar = simCalendar;
-      }
-      renderCalendar(simCalendar);
-    } catch {
-      if (jobId !== state.calendarJobId) return;
-      calendarNode.innerHTML = `<div class="calendar-loading"><span>Calendar data is temporarily unavailable.</span></div>`;
-    }
+    calendarNode.innerHTML = `<div class="calendar-loading"><span>Calendar data is unavailable for this wallet.</span></div>`;
   }
 }
-
 
 function renderDetailCards(profile) {
   const details = [
