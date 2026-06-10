@@ -173,7 +173,37 @@ function isLegacyEmptySocialSnapshot(snapshot) {
   return metrics.every((value) => Number(value || 0) === 0);
 }
 
-async function tryAbscanCsvExport(wallet, cutoffTime) {
+async function tryEtherscanApi(wallet, cutoffTime) {
+  try {
+    const url = `https://abscan.org/api?module=account&action=txlist&address=${encodeURIComponent(wallet)}&sort=desc&offset=10000&page=1`;
+    const response = await fetch(url, {
+      headers: {
+        "user-agent": "Mozilla/5.0",
+        "accept": "application/json",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (String(data?.status) !== "1" || !Array.isArray(data?.result)) return null;
+
+    const counts = {};
+    for (const tx of data.result) {
+      const ts = Number(tx?.timeStamp);
+      if (!ts) continue;
+      const txTime = ts * 1000;
+      if (txTime < cutoffTime) break; // sorted desc, safe to stop
+      const date = new Date(txTime);
+      const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return Object.keys(counts).length > 0 ? counts : null;
+  } catch {
+    return null;
+  }
+}
+
   try {
     const url = `https://abscan.org/exportData?type=address&a=${encodeURIComponent(wallet)}&startdate=2024-01-01&enddate=2099-12-31`;
     const response = await fetch(url, {
@@ -226,7 +256,13 @@ async function fetchAbscanCalendar(wallet) {
   cutoff.setDate(cutoff.getDate() - 179);
   const cutoffTime = cutoff.getTime();
 
-  // ── Strategy 1: CSV export (single request, fastest) ───────────────────────
+  // ── Strategy 1: Etherscan-compatible JSON API (fastest, ~1s) ───────────────
+  const apiCounts = await tryEtherscanApi(wallet, cutoffTime);
+  if (apiCounts) {
+    return { wallet, source: "abscan-api", status: "ready", dailyCounts: apiCounts };
+  }
+
+  // ── Strategy 2: CSV export (single request) ────────────────────────────────
   const csvCounts = await tryAbscanCsvExport(wallet, cutoffTime);
   if (csvCounts) {
     return { wallet, source: "abscan-csv", status: "ready", dailyCounts: csvCounts };

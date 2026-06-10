@@ -1,5 +1,3 @@
-import csv
-import io
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -10,96 +8,61 @@ from urllib.request import Request, urlopen
 
 
 WALLET_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
-TOTAL_TX_RE = re.compile(r"Latest\s+\d+\s+from a total of\s+([\d,]+)\s+transactions", re.IGNORECASE)
 ROW_RE = re.compile(
     r"<tr>\s*<td><button[\s\S]*?<td class='showDate[^>]*><span[^>]*>(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})</span></td>[\s\S]*?data-highlight-target=\"(0x[a-fA-F0-9]{40})\"[\s\S]*?<td class=\"text-center\">[\s\S]*?data-highlight-target=\"(0x[a-fA-F0-9]{40})\"",
     re.MULTILINE,
 )
 
 
-def fetch_bytes(url: str, timeout: int = 25) -> bytes:
+def fetch_text(url: str, timeout: int = 8) -> str:
     req = Request(
         url,
         headers={
             "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
-            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "accept": "application/json, text/html, */*;q=0.8",
             "accept-language": "en-US,en;q=0.9",
             "cache-control": "no-cache",
-            "pragma": "no-cache",
             "referer": "https://abscan.org/",
         },
     )
     with urlopen(req, timeout=timeout) as res:
-        return res.read()
+        return res.read().decode("utf-8", errors="ignore")
 
 
-def fetch_text(url: str, timeout: int = 25) -> str:
-    return fetch_bytes(url, timeout).decode("utf-8", errors="ignore")
-
-
-def extract_total_pages(html: str) -> int:
-    match = re.search(r"Page\s+1\s+of\s+(\d+)", html, re.IGNORECASE)
-    return int(match.group(1)) if match else 1
-
-
-def extract_total_tx_count(html: str):
-    match = TOTAL_TX_RE.search(html)
-    if not match:
-        return None
+# ── Strategy 1: Etherscan-compatible JSON API ──────────────────────────────────
+def try_etherscan_api(wallet: str, cutoff: datetime) -> dict | None:
+    """
+    Abscan supports Etherscan-compatible JSON API.
+    Returns up to 10,000 txs as JSON in a single fast request.
+    """
     try:
-        return int(match.group(1).replace(",", ""))
-    except ValueError:
-        return None
-
-
-def extract_rows(html: str):
-    rows = []
-    for match in ROW_RE.finditer(html):
-        rows.append(
-            {
-                "dateText": match.group(1),
-                "from": match.group(2),
-                "to": match.group(3),
-            }
+        url = (
+            f"https://abscan.org/api?module=account&action=txlist"
+            f"&address={quote(wallet)}&sort=desc&offset=10000&page=1"
         )
-    return rows
+        raw = fetch_text(url, timeout=8)
+        data = json.loads(raw)
 
-
-def try_csv_export(wallet: str, cutoff: datetime) -> dict | None:
-    """
-    Try abscan's CSV export endpoint which returns all transactions at once.
-    Returns dailyCounts dict on success, None on failure.
-    """
-    try:
-        url = f"https://abscan.org/exportData?type=address&a={quote(wallet)}&startdate=2024-01-01&enddate=2099-12-31"
-        raw = fetch_bytes(url, timeout=20)
-        text = raw.decode("utf-8", errors="ignore")
-
-        # Must look like a CSV (has commas and newlines)
-        if "," not in text or "\n" not in text:
+        # Etherscan API returns status "1" for success
+        if str(data.get("status")) != "1":
+            return None
+        result = data.get("result")
+        if not isinstance(result, list) or not result:
             return None
 
-        counts = {}
-        reader = csv.DictReader(io.StringIO(text))
-        for row in reader:
-            # Column names vary; try common ones
-            date_str = (
-                row.get("DateTime (UTC)")
-                or row.get("DateTime")
-                or row.get("Date")
-                or row.get("Timestamp")
-                or ""
-            ).strip().strip('"')
-            if not date_str:
+        counts: dict = {}
+        for tx in result:
+            ts = tx.get("timeStamp")
+            if not ts:
                 continue
             try:
-                # Parse "2024-05-01 12:34:56" or "2024-05-01T12:34:56"
-                dt = datetime.fromisoformat(date_str.replace(" ", "T")).replace(tzinfo=timezone.utc)
-            except ValueError:
+                tx_date = datetime.fromtimestamp(int(ts), tz=timezone.utc)
+            except (ValueError, OSError):
                 continue
-            if dt < cutoff:
-                continue
-            key = dt.strftime("%Y-%m-%d")
+            if tx_date < cutoff:
+                # Results are sorted desc → once we pass cutoff we can stop
+                break
+            key = tx_date.strftime("%Y-%m-%d")
             counts[key] = counts.get(key, 0) + 1
 
         return counts if counts else None
@@ -107,8 +70,22 @@ def try_csv_export(wallet: str, cutoff: datetime) -> dict | None:
         return None
 
 
+# ── Strategy 2: Parallel HTML scraping (fallback) ─────────────────────────────
+def extract_rows(html: str):
+    rows = []
+    for match in ROW_RE.finditer(html):
+        rows.append({"dateText": match.group(1), "from": match.group(2), "to": match.group(3)})
+    return rows
+
+
+def fetch_page_safe(url):
+    try:
+        return fetch_text(url, timeout=6)
+    except Exception:
+        return ""
+
+
 def process_rows(rows, normalized_wallet, cutoff, counts):
-    """Returns True if ALL rows on this page are older than cutoff."""
     all_old = len(rows) > 0
     for row in rows:
         try:
@@ -117,83 +94,69 @@ def process_rows(rows, normalized_wallet, cutoff, counts):
             continue
         if tx_date >= cutoff:
             all_old = False
-            is_wallet_out = row["from"].lower() == normalized_wallet
-            is_wallet_in = row["to"].lower() == normalized_wallet
-            if not is_wallet_out and not is_wallet_in:
-                continue
-            key = row["dateText"][:10]
-            counts[key] = counts.get(key, 0) + 1
+            if row["from"].lower() == normalized_wallet or row["to"].lower() == normalized_wallet:
+                key = row["dateText"][:10]
+                counts[key] = counts.get(key, 0) + 1
     return all_old
 
 
-def fetch_page_safe(url):
-    try:
-        return fetch_text(url, timeout=20)
-    except Exception:
-        return ""
-
-
-def fetch_calendar(wallet: str):
-    normalized_wallet = wallet.lower()
-    cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=179)
-
-    # ── Strategy 1: CSV export (single request, fastest) ──────────────────────
-    csv_counts = try_csv_export(wallet, cutoff)
-    if csv_counts is not None:
-        return {
-            "wallet": wallet,
-            "source": "abscan-csv",
-            "status": "ready",
-            "totalTxCount": None,
-            "dailyCounts": csv_counts,
-        }
-
-    # ── Strategy 2: HTML scraping with parallel batch fetching ─────────────────
-    first_page_html = fetch_text(f"https://abscan.org/txs?a={quote(wallet)}")
-    total_pages = extract_total_pages(first_page_html)
-    total_tx_count = extract_total_tx_count(first_page_html)
-    max_pages = min(total_pages, 40)
+def try_html_scrape(wallet: str, normalized_wallet: str, cutoff: datetime) -> dict:
     counts: dict = {}
-    BATCH_SIZE = 8
+    BATCH_SIZE = 6
 
-    page1_rows = extract_rows(first_page_html)
+    try:
+        first_html = fetch_text(f"https://abscan.org/txs?a={quote(wallet)}", timeout=6)
+    except Exception:
+        return counts
+
+    match = re.search(r"Page\s+1\s+of\s+(\d+)", first_html, re.IGNORECASE)
+    total_pages = int(match.group(1)) if match else 1
+    max_pages = min(total_pages, 20)
+
+    page1_rows = extract_rows(first_html)
     if not page1_rows or process_rows(page1_rows, normalized_wallet, cutoff, counts):
-        return {
-            "wallet": wallet,
-            "source": "abscan",
-            "status": "ready",
-            "totalTxCount": total_tx_count,
-            "dailyCounts": counts,
-        }
+        return counts
 
     for batch_start in range(2, max_pages + 1, BATCH_SIZE):
         batch_end = min(batch_start + BATCH_SIZE - 1, max_pages)
-        urls = [
-            f"https://abscan.org/txs?a={quote(wallet)}&p={p}"
-            for p in range(batch_start, batch_end + 1)
-        ]
-
+        urls = [f"https://abscan.org/txs?a={quote(wallet)}&p={p}" for p in range(batch_start, batch_end + 1)]
         with ThreadPoolExecutor(max_workers=BATCH_SIZE) as executor:
             html_results = list(executor.map(fetch_page_safe, urls))
 
         batch_all_old = True
         for html in html_results:
-            if not html:
-                continue
-            rows = extract_rows(html)
-            if not rows:
-                continue
-            if not process_rows(rows, normalized_wallet, cutoff, counts):
-                batch_all_old = False
-
+            if html and extract_rows(html):
+                if not process_rows(extract_rows(html), normalized_wallet, cutoff, counts):
+                    batch_all_old = False
         if batch_all_old:
             break
 
+    return counts
+
+
+# ── Main calendar builder ──────────────────────────────────────────────────────
+def fetch_calendar(wallet: str):
+    normalized_wallet = wallet.lower()
+    cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=179)
+
+    # Strategy 1: Fast JSON API (works within 10s Vercel timeout)
+    counts = try_etherscan_api(wallet, cutoff)
+    if counts is not None:
+        return {
+            "wallet": wallet,
+            "source": "abscan-api",
+            "status": "ready",
+            "totalTxCount": None,
+            "dailyCounts": counts,
+        }
+
+    # Strategy 2: Parallel HTML scraping (slower, may timeout on hobby plan)
+    counts = try_html_scrape(wallet, normalized_wallet, cutoff)
     return {
         "wallet": wallet,
-        "source": "abscan",
+        "source": "abscan-html",
         "status": "ready",
-        "totalTxCount": total_tx_count,
+        "totalTxCount": None,
         "dailyCounts": counts,
     }
 
@@ -211,17 +174,14 @@ class handler(BaseHTTPRequestHandler):
             payload = fetch_calendar(wallet)
             return self._send_json(200, payload)
         except Exception as exc:
-            return self._send_json(
-                200,
-                {
-                    "wallet": wallet,
-                    "source": "abscan",
-                    "status": "unavailable",
-                    "warning": str(exc) or "Calendar provider failed",
-                    "totalTxCount": None,
-                    "dailyCounts": {},
-                },
-            )
+            return self._send_json(200, {
+                "wallet": wallet,
+                "source": "abscan",
+                "status": "unavailable",
+                "warning": str(exc) or "Calendar provider failed",
+                "totalTxCount": None,
+                "dailyCounts": {},
+            })
 
     def _send_json(self, status_code: int, payload: dict):
         body = json.dumps(payload).encode("utf-8")
