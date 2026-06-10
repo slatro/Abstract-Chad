@@ -1,6 +1,8 @@
+import csv
+import io
 import json
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, quote, urlparse
@@ -15,20 +17,24 @@ ROW_RE = re.compile(
 )
 
 
-def fetch_text(url: str) -> str:
+def fetch_bytes(url: str, timeout: int = 25) -> bytes:
     req = Request(
         url,
         headers={
             "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
-            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "accept-language": "en-US,en;q=0.9",
             "cache-control": "no-cache",
             "pragma": "no-cache",
             "referer": "https://abscan.org/",
         },
     )
-    with urlopen(req, timeout=25) as res:
-        return res.read().decode("utf-8", errors="ignore")
+    with urlopen(req, timeout=timeout) as res:
+        return res.read()
+
+
+def fetch_text(url: str, timeout: int = 25) -> str:
+    return fetch_bytes(url, timeout).decode("utf-8", errors="ignore")
 
 
 def extract_total_pages(html: str) -> int:
@@ -59,8 +65,50 @@ def extract_rows(html: str):
     return rows
 
 
+def try_csv_export(wallet: str, cutoff: datetime) -> dict | None:
+    """
+    Try abscan's CSV export endpoint which returns all transactions at once.
+    Returns dailyCounts dict on success, None on failure.
+    """
+    try:
+        url = f"https://abscan.org/exportData?type=address&a={quote(wallet)}&startdate=2024-01-01&enddate=2099-12-31"
+        raw = fetch_bytes(url, timeout=20)
+        text = raw.decode("utf-8", errors="ignore")
+
+        # Must look like a CSV (has commas and newlines)
+        if "," not in text or "\n" not in text:
+            return None
+
+        counts = {}
+        reader = csv.DictReader(io.StringIO(text))
+        for row in reader:
+            # Column names vary; try common ones
+            date_str = (
+                row.get("DateTime (UTC)")
+                or row.get("DateTime")
+                or row.get("Date")
+                or row.get("Timestamp")
+                or ""
+            ).strip().strip('"')
+            if not date_str:
+                continue
+            try:
+                # Parse "2024-05-01 12:34:56" or "2024-05-01T12:34:56"
+                dt = datetime.fromisoformat(date_str.replace(" ", "T")).replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+            if dt < cutoff:
+                continue
+            key = dt.strftime("%Y-%m-%d")
+            counts[key] = counts.get(key, 0) + 1
+
+        return counts if counts else None
+    except Exception:
+        return None
+
+
 def process_rows(rows, normalized_wallet, cutoff, counts):
-    """Process a page's rows. Returns True if ALL rows on this page are older than cutoff."""
+    """Returns True if ALL rows on this page are older than cutoff."""
     all_old = len(rows) > 0
     for row in rows:
         try:
@@ -80,7 +128,7 @@ def process_rows(rows, normalized_wallet, cutoff, counts):
 
 def fetch_page_safe(url):
     try:
-        return fetch_text(url)
+        return fetch_text(url, timeout=20)
     except Exception:
         return ""
 
@@ -89,24 +137,41 @@ def fetch_calendar(wallet: str):
     normalized_wallet = wallet.lower()
     cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=179)
 
+    # ── Strategy 1: CSV export (single request, fastest) ──────────────────────
+    csv_counts = try_csv_export(wallet, cutoff)
+    if csv_counts is not None:
+        return {
+            "wallet": wallet,
+            "source": "abscan-csv",
+            "status": "ready",
+            "totalTxCount": None,
+            "dailyCounts": csv_counts,
+        }
+
+    # ── Strategy 2: HTML scraping with parallel batch fetching ─────────────────
     first_page_html = fetch_text(f"https://abscan.org/txs?a={quote(wallet)}")
     total_pages = extract_total_pages(first_page_html)
     total_tx_count = extract_total_tx_count(first_page_html)
     max_pages = min(total_pages, 40)
-    counts = {}
+    counts: dict = {}
     BATCH_SIZE = 8
 
-    # Process page 1 first (already fetched)
     page1_rows = extract_rows(first_page_html)
     if not page1_rows or process_rows(page1_rows, normalized_wallet, cutoff, counts):
-        return {"wallet": wallet, "source": "abscan", "status": "ready",
-                "totalTxCount": total_tx_count, "dailyCounts": counts}
+        return {
+            "wallet": wallet,
+            "source": "abscan",
+            "status": "ready",
+            "totalTxCount": total_tx_count,
+            "dailyCounts": counts,
+        }
 
-    # Fetch remaining pages in parallel batches
     for batch_start in range(2, max_pages + 1, BATCH_SIZE):
         batch_end = min(batch_start + BATCH_SIZE - 1, max_pages)
-        page_numbers = list(range(batch_start, batch_end + 1))
-        urls = [f"https://abscan.org/txs?a={quote(wallet)}&p={p}" for p in page_numbers]
+        urls = [
+            f"https://abscan.org/txs?a={quote(wallet)}&p={p}"
+            for p in range(batch_start, batch_end + 1)
+        ]
 
         with ThreadPoolExecutor(max_workers=BATCH_SIZE) as executor:
             html_results = list(executor.map(fetch_page_safe, urls))
@@ -118,11 +183,9 @@ def fetch_calendar(wallet: str):
             rows = extract_rows(html)
             if not rows:
                 continue
-            page_all_old = process_rows(rows, normalized_wallet, cutoff, counts)
-            if not page_all_old:
+            if not process_rows(rows, normalized_wallet, cutoff, counts):
                 batch_all_old = False
 
-        # Stop only when every page in this batch was entirely older than cutoff
         if batch_all_old:
             break
 
@@ -133,7 +196,6 @@ def fetch_calendar(wallet: str):
         "totalTxCount": total_tx_count,
         "dailyCounts": counts,
     }
-
 
 
 class handler(BaseHTTPRequestHandler):

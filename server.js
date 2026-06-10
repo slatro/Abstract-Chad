@@ -173,6 +173,52 @@ function isLegacyEmptySocialSnapshot(snapshot) {
   return metrics.every((value) => Number(value || 0) === 0);
 }
 
+async function tryAbscanCsvExport(wallet, cutoffTime) {
+  try {
+    const url = `https://abscan.org/exportData?type=address&a=${encodeURIComponent(wallet)}&startdate=2024-01-01&enddate=2099-12-31`;
+    const response = await fetch(url, {
+      headers: {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+        "accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+        "referer": "https://abscan.org/",
+      },
+    });
+    if (!response.ok) return null;
+
+    const text = await response.text();
+    // Must look like a CSV
+    if (!text.includes(",") || !text.includes("\n")) return null;
+
+    const lines = text.split("\n");
+    if (lines.length < 2) return null;
+
+    // Parse header to find date column
+    const header = lines[0].split(",").map((h) => h.replace(/"/g, "").trim().toLowerCase());
+    const dateColIndex = header.findIndex((h) =>
+      h.includes("datetime") || h.includes("date") || h.includes("timestamp")
+    );
+    if (dateColIndex === -1) return null;
+
+    const counts = {};
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const cols = line.split(",");
+      const rawDate = (cols[dateColIndex] || "").replace(/"/g, "").trim();
+      if (!rawDate) continue;
+      const txDate = new Date(rawDate.replace(" ", "T") + (rawDate.includes("Z") ? "" : "Z"));
+      if (Number.isNaN(txDate.getTime())) continue;
+      if (txDate.getTime() < cutoffTime) continue;
+      const key = rawDate.slice(0, 10);
+      counts[key] = (counts[key] || 0) + 1;
+    }
+
+    return Object.keys(counts).length > 0 ? counts : null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchAbscanCalendar(wallet) {
   const normalizedWallet = wallet.toLowerCase();
   const cutoff = new Date();
@@ -180,18 +226,18 @@ async function fetchAbscanCalendar(wallet) {
   cutoff.setDate(cutoff.getDate() - 179);
   const cutoffTime = cutoff.getTime();
 
+  // ── Strategy 1: CSV export (single request, fastest) ───────────────────────
+  const csvCounts = await tryAbscanCsvExport(wallet, cutoffTime);
+  if (csvCounts) {
+    return { wallet, source: "abscan-csv", status: "ready", dailyCounts: csvCounts };
+  }
+
+  // ── Strategy 2: Parallel HTML scraping ─────────────────────────────────────
   const firstPageHtml = await fetchText(`https://abscan.org/txs?a=${encodeURIComponent(wallet)}`);
   const totalPages = extractTotalPages(firstPageHtml);
   const counts = {};
-
-  // High-volume wallets can have hundreds of pages; fetch in parallel batches
-  // to stay within Vercel's function timeout. Each batch of 8 pages takes ~2-3s.
   const maxPages = Math.min(totalPages, 40);
   const BATCH_SIZE = 8;
-
-  // Process page 1 first (already fetched)
-  const page1Rows = extractTransactionRows(firstPageHtml);
-  let allPagesOlderThanCutoff = false;
 
   const processRows = (rows) => {
     let allOld = rows.length > 0;
@@ -210,13 +256,11 @@ async function fetchAbscanCalendar(wallet) {
     return allOld;
   };
 
-  // Process page 1
+  const page1Rows = extractTransactionRows(firstPageHtml);
   if (page1Rows.length === 0 || processRows(page1Rows)) {
-    // No rows or all old already on page 1 → nothing to do
     return { wallet, source: "abscan", status: "ready", dailyCounts: counts };
   }
 
-  // Fetch remaining pages in parallel batches
   for (let batchStart = 2; batchStart <= maxPages; batchStart += BATCH_SIZE) {
     const batchEnd = Math.min(batchStart + BATCH_SIZE - 1, maxPages);
     const pageNumbers = [];
@@ -225,30 +269,22 @@ async function fetchAbscanCalendar(wallet) {
     const htmlResults = await Promise.all(
       pageNumbers.map((p) =>
         fetchText(`https://abscan.org/txs?a=${encodeURIComponent(wallet)}&p=${p}`)
-          .catch(() => "") // don't let one failed page kill the whole request
+          .catch(() => "")
       )
     );
 
     let batchAllOld = true;
-    for (let i = 0; i < htmlResults.length; i++) {
-      const html = htmlResults[i];
+    for (const html of htmlResults) {
       if (!html) continue;
       const rows = extractTransactionRows(html);
       if (!rows.length) continue;
-      const pageAllOld = processRows(rows);
-      if (!pageAllOld) batchAllOld = false;
+      if (!processRows(rows)) batchAllOld = false;
     }
 
-    // Stop fetching more batches only when every page in this batch was entirely old
     if (batchAllOld) break;
   }
 
-  return {
-    wallet,
-    source: "abscan",
-    status: "ready",
-    dailyCounts: counts,
-  };
+  return { wallet, source: "abscan", status: "ready", dailyCounts: counts };
 }
 
 

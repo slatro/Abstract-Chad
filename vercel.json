@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api/calendar.py": {
+      "maxDuration": 60
+    },
+    "api/x-stats.py": {
+      "maxDuration": 60
+    }
+  }
+}
