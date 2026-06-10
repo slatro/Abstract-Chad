@@ -1344,7 +1344,7 @@ function renderCalendarLoading() {
 async function buildCalendarFromRpcLinear(wallet, mainnetTxCount) {
   // Abstract mainnet has ~1 second block time.
   // We approximate past block numbers linearly: past_block ≈ current_block - (days_ago × 86400)
-  // This avoids slow binary search and only needs 27 parallel RPC calls.
+  // This avoids slow binary search and only needs 53 parallel RPC calls.
   const BLOCKS_PER_DAY = 86400;
   const WEEKS = 52; // 52 weeks = 1 year
 
@@ -1361,6 +1361,14 @@ async function buildCalendarFromRpcLinear(wallet, mainnetTxCount) {
   const nonces = await Promise.all(
     boundaryBlocks.map((block) => getTxCountAtBlock(ABS_MAINNET_RPC, wallet, block))
   );
+
+  // AGW smart contract wallets: eth_getTransactionCount returns 0 or very low values
+  // because their tx nonce is stored in contract storage, not as EOA nonce.
+  // Detect this: if total nonce diff across the year is < 5% of mainnetTxCount, bail out.
+  const totalNonceDiff = Math.max(0, (nonces[WEEKS] || 0) - (nonces[0] || 0));
+  if (totalNonceDiff < mainnetTxCount * 0.05) {
+    return null; // Smart contract wallet – fall through to simulation
+  }
 
   // Build daily counts by distributing each week's tx count across its days
   const today = new Date();
