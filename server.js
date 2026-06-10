@@ -183,29 +183,64 @@ async function fetchAbscanCalendar(wallet) {
   const firstPageHtml = await fetchText(`https://abscan.org/txs?a=${encodeURIComponent(wallet)}`);
   const totalPages = extractTotalPages(firstPageHtml);
   const counts = {};
-  const maxPages = Math.min(totalPages, 12);
 
-  for (let page = 1; page <= maxPages; page += 1) {
-    const html = page === 1 ? firstPageHtml : await fetchText(`https://abscan.org/txs?a=${encodeURIComponent(wallet)}&p=${page}`);
-    const rows = extractTransactionRows(html);
-    if (!rows.length) break;
+  // High-volume wallets can have hundreds of pages; fetch in parallel batches
+  // to stay within Vercel's function timeout. Each batch of 8 pages takes ~2-3s.
+  const maxPages = Math.min(totalPages, 40);
+  const BATCH_SIZE = 8;
 
-    let pageHasRecent = false;
+  // Process page 1 first (already fetched)
+  const page1Rows = extractTransactionRows(firstPageHtml);
+  let allPagesOlderThanCutoff = false;
+
+  const processRows = (rows) => {
+    let allOld = rows.length > 0;
     for (const row of rows) {
       const txDate = new Date(`${row.dateText.replace(" ", "T")}Z`);
       if (Number.isNaN(txDate.getTime())) continue;
-      if (txDate.getTime() < cutoffTime) continue;
-      pageHasRecent = true;
+      if (txDate.getTime() >= cutoffTime) {
+        allOld = false;
+        const isWalletOut = row.from.toLowerCase() === normalizedWallet;
+        const isWalletIn = row.to.toLowerCase() === normalizedWallet;
+        if (!isWalletOut && !isWalletIn) continue;
+        const key = row.dateText.slice(0, 10);
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    }
+    return allOld;
+  };
 
-      const isWalletOut = row.from.toLowerCase() === normalizedWallet;
-      const isWalletIn = row.to.toLowerCase() === normalizedWallet;
-      if (!isWalletOut && !isWalletIn) continue;
+  // Process page 1
+  if (page1Rows.length === 0 || processRows(page1Rows)) {
+    // No rows or all old already on page 1 → nothing to do
+    return { wallet, source: "abscan", status: "ready", dailyCounts: counts };
+  }
 
-      const key = row.dateText.slice(0, 10);
-      counts[key] = (counts[key] || 0) + 1;
+  // Fetch remaining pages in parallel batches
+  for (let batchStart = 2; batchStart <= maxPages; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE - 1, maxPages);
+    const pageNumbers = [];
+    for (let p = batchStart; p <= batchEnd; p++) pageNumbers.push(p);
+
+    const htmlResults = await Promise.all(
+      pageNumbers.map((p) =>
+        fetchText(`https://abscan.org/txs?a=${encodeURIComponent(wallet)}&p=${p}`)
+          .catch(() => "") // don't let one failed page kill the whole request
+      )
+    );
+
+    let batchAllOld = true;
+    for (let i = 0; i < htmlResults.length; i++) {
+      const html = htmlResults[i];
+      if (!html) continue;
+      const rows = extractTransactionRows(html);
+      if (!rows.length) continue;
+      const pageAllOld = processRows(rows);
+      if (!pageAllOld) batchAllOld = false;
     }
 
-    if (!pageHasRecent) break;
+    // Stop fetching more batches only when every page in this batch was entirely old
+    if (batchAllOld) break;
   }
 
   return {
@@ -215,6 +250,7 @@ async function fetchAbscanCalendar(wallet) {
     dailyCounts: counts,
   };
 }
+
 
 async function fetchText(url) {
   const response = await fetch(url, {

@@ -1,5 +1,6 @@
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, quote, urlparse
@@ -58,6 +59,32 @@ def extract_rows(html: str):
     return rows
 
 
+def process_rows(rows, normalized_wallet, cutoff, counts):
+    """Process a page's rows. Returns True if ALL rows on this page are older than cutoff."""
+    all_old = len(rows) > 0
+    for row in rows:
+        try:
+            tx_date = datetime.strptime(row["dateText"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if tx_date >= cutoff:
+            all_old = False
+            is_wallet_out = row["from"].lower() == normalized_wallet
+            is_wallet_in = row["to"].lower() == normalized_wallet
+            if not is_wallet_out and not is_wallet_in:
+                continue
+            key = row["dateText"][:10]
+            counts[key] = counts.get(key, 0) + 1
+    return all_old
+
+
+def fetch_page_safe(url):
+    try:
+        return fetch_text(url)
+    except Exception:
+        return ""
+
+
 def fetch_calendar(wallet: str):
     normalized_wallet = wallet.lower()
     cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=179)
@@ -65,36 +92,38 @@ def fetch_calendar(wallet: str):
     first_page_html = fetch_text(f"https://abscan.org/txs?a={quote(wallet)}")
     total_pages = extract_total_pages(first_page_html)
     total_tx_count = extract_total_tx_count(first_page_html)
-    # High-volume wallets can have thousands of txs; allow up to 50 pages
-    # Each abscan page shows ~25 txs. 50 pages = ~1250 txs which is more than
-    # enough to cover 180 days for even very active wallets.
-    max_pages = min(total_pages, 50)
+    max_pages = min(total_pages, 40)
     counts = {}
+    BATCH_SIZE = 8
 
-    for page in range(1, max_pages + 1):
-        html = first_page_html if page == 1 else fetch_text(f"https://abscan.org/txs?a={quote(wallet)}&p={page}")
-        rows = extract_rows(html)
-        if not rows:
-            break
+    # Process page 1 first (already fetched)
+    page1_rows = extract_rows(first_page_html)
+    if not page1_rows or process_rows(page1_rows, normalized_wallet, cutoff, counts):
+        return {"wallet": wallet, "source": "abscan", "status": "ready",
+                "totalTxCount": total_tx_count, "dailyCounts": counts}
 
-        all_rows_older_than_cutoff = True
-        for row in rows:
-            try:
-                tx_date = datetime.strptime(row["dateText"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-            except ValueError:
+    # Fetch remaining pages in parallel batches
+    for batch_start in range(2, max_pages + 1, BATCH_SIZE):
+        batch_end = min(batch_start + BATCH_SIZE - 1, max_pages)
+        page_numbers = list(range(batch_start, batch_end + 1))
+        urls = [f"https://abscan.org/txs?a={quote(wallet)}&p={p}" for p in page_numbers]
+
+        with ThreadPoolExecutor(max_workers=BATCH_SIZE) as executor:
+            html_results = list(executor.map(fetch_page_safe, urls))
+
+        batch_all_old = True
+        for html in html_results:
+            if not html:
                 continue
+            rows = extract_rows(html)
+            if not rows:
+                continue
+            page_all_old = process_rows(rows, normalized_wallet, cutoff, counts)
+            if not page_all_old:
+                batch_all_old = False
 
-            if tx_date >= cutoff:
-                all_rows_older_than_cutoff = False
-                is_wallet_out = row["from"].lower() == normalized_wallet
-                is_wallet_in = row["to"].lower() == normalized_wallet
-                if not is_wallet_out and not is_wallet_in:
-                    continue
-                key = row["dateText"][:10]
-                counts[key] = counts.get(key, 0) + 1
-
-        # Only stop early when every tx on this page predates the 180-day window
-        if all_rows_older_than_cutoff:
+        # Stop only when every page in this batch was entirely older than cutoff
+        if batch_all_old:
             break
 
     return {
@@ -104,6 +133,7 @@ def fetch_calendar(wallet: str):
         "totalTxCount": total_tx_count,
         "dailyCounts": counts,
     }
+
 
 
 class handler(BaseHTTPRequestHandler):
